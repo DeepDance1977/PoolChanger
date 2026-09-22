@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PoolChanger</title>
+<style>
+body{margin:0;background:#101217;color:#eee;font-family:system-ui,sans-serif}
+header{padding:20px 24px;border-bottom:1px solid #2b2f38}
+main{max-width:1100px;margin:auto;padding:24px}
+h1{margin:0}.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+button,input{font:inherit;padding:10px;border-radius:8px;border:1px solid #3b404b;background:#191c23;color:#eee}
+button{cursor:pointer}.primary{background:#2b6ef3!important}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.card{background:#181b21;border:1px solid #2b2f38;border-radius:12px;padding:16px;cursor:pointer}
+.card.selected{border-color:#4e8cff}.row{display:flex;justify-content:space-between;margin:6px 0}
+.muted{color:#9ca3af}.status{color:#6ee7a0}
+.modal{position:fixed;inset:0;background:#0009;display:none;align-items:center;justify-content:center;padding:20px}
+.modal.open{display:flex}.panel{background:#181b21;padding:22px;border-radius:14px;width:min(500px,100%)}
+label{display:block;margin:12px 0 5px;color:#b7bdc9}
+</style>
+</head>
+<body>
+<header><h1>⛏️ PoolChanger</h1></header>
+<main>
+<div class="toolbar">
+<input id="cidr" value="192.168.0.0/24" placeholder="LAN">
+<button class="primary" onclick="scan()">Miner suchen</button>
+<button onclick="openPool()">Pool ändern</button>
+</div>
+<div id="miners" class="grid"><p class="muted">Noch keine Miner geladen.</p></div>
+</main>
+<div id="modal" class="modal"><div class="panel">
+<h2>Pool ändern</h2><p id="selected" class="muted"></p>
+<label>Pool-Host</label><input id="host" placeholder="192.168.0.10">
+<label>Port</label><input id="port" type="number" value="3333">
+<label>Worker / Benutzer</label><input id="user">
+<label>Passwort</label><input id="password" value="x">
+<label><input id="tls" type="checkbox"> TLS</label>
+<div class="toolbar"><button class="primary" onclick="applyPool()">Anwenden</button><button onclick="closePool()">Abbrechen</button></div>
+</div></div>
+<script>
+let miners=[],selected=new Set();
+function render(){
+ const el=document.getElementById('miners');
+ if(!miners.length){el.innerHTML='<p class="muted">Keine Miner gefunden.</p>';return}
+ el.innerHTML=miners.map(m=>`<div class="card ${selected.has(m.ip)?'selected':''}" onclick="toggle('${m.ip}')">
+ <div class="row"><strong>${esc(m.name)}</strong><span class="status">● online</span></div>
+ <div class="muted">${esc(m.model)} · ${esc(m.ip)}</div><hr>
+ <div class="row"><span>Hashrate</span><strong>${hash(m.hashrate)}</strong></div>
+ <div class="row"><span>Temperatur</span><strong>${m.temperature??'—'} °C</strong></div>
+ <div class="row"><span>Pool</span><strong>${esc(m.pool||'—')}</strong></div></div>`).join('')
+}
+function toggle(ip){selected.has(ip)?selected.delete(ip):selected.add(ip);render()}
+async function scan(){
+ document.getElementById('miners').innerHTML='<p class="muted">Suche im LAN …</p>';
+ const r=await fetch('/api/miners/scan?cidr='+encodeURIComponent(document.getElementById('cidr').value),{method:'POST'});
+ const d=await r.json();miners=d.miners||[];selected.clear();render()
+}
+function openPool(){if(!selected.size)return alert('Bitte Miner auswählen.');document.getElementById('selected').textContent=selected.size+' Miner ausgewählt';document.getElementById('modal').classList.add('open')}
+function closePool(){document.getElementById('modal').classList.remove('open')}
+async function applyPool(){
+ const pool={host:document.getElementById('host').value.trim(),port:+document.getElementById('port').value,user:document.getElementById('user').value,password:document.getElementById('password').value,tls:document.getElementById('tls').checked};
+ if(!pool.host)return alert('Pool-Host fehlt.');
+ const r=await fetch('/api/pools/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({miner_ips:[...selected],pool,restart:true})});
+ const d=await r.json();alert(d.results.map(x=>x.ip+': '+(x.ok?'OK':x.error)).join('\n'));closePool();scan()
+}
+function hash(v){if(typeof v!=='number')return v||'—';if(v>1e12)return(v/1e12).toFixed(2)+' TH/s';if(v>1e9)return(v/1e9).toFixed(2)+' GH/s';return v}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+services:
+  poolchanger:
+    build: .
+    container_name: poolchanger
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      - poolchanger-data:/data
+    environment:
+      POOLCHANGER_DB: /data/poolchanger.db
+      POOLCHANGER_SCAN_CIDR: 192.168.0.0/24
+      POOLCHANGER_PORT: 8090
+volumes:
+  poolchanger-data:
