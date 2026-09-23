@@ -1,71 +1,65 @@
-import asyncio
 import httpx
 
-class MinerError(Exception):
-    pass
-
 class AxeOSMiner:
-    """Adapter for the AxeOS REST API."""
+    def __init__(self, ip, timeout=3):
+        self.ip=ip
+        self.base=f"http://{ip}"
+        self.timeout=timeout
 
-    def __init__(self, ip: str):
-        self.ip = ip.strip().replace("http://", "").replace("https://", "").rstrip("/")
-        self.base = f"http://{self.ip}"
+    async def request(self, method, path, **kwargs):
+        async with httpx.AsyncClient(timeout=self.timeout) as c:
+            r=await c.request(method,self.base+path,**kwargs)
+            r.raise_for_status()
+            return r.json() if r.content else {}
 
-    async def _request(self, method: str, path: str, **kwargs):
-        try:
-            async with httpx.AsyncClient(timeout=kwargs.pop("timeout", 2.0), follow_redirects=False) as client:
-                response = await client.request(method, self.base + path, **kwargs)
-        except (httpx.HTTPError, asyncio.TimeoutError) as exc:
-            raise MinerError(f"{self.ip}: {exc}") from exc
-        if response.status_code >= 400:
-            raise MinerError(f"{self.ip}: HTTP {response.status_code}")
-        try:
-            return response.json()
-        except ValueError:
-            return {}
-
-    async def info(self, timeout: float = 2.0):
-        data = await self._request("GET", "/api/system/info", timeout=timeout)
+    async def info(self):
+        d=await self.request("GET","/api/system/info")
+        pools=d.get("pools") or []
+        primary=d.get("primaryPoolIndex",0)
+        secondary=d.get("secondaryPoolIndex",1)
+        def getpool(i):
+            return pools[i] if isinstance(i,int) and 0<=i<len(pools) else {}
         return {
-            "ip": self.ip,
-            "name": data.get("hostname") or data.get("boardName") or self.ip,
-            "model": data.get("boardName") or data.get("board") or "AxeOS",
-            "version": data.get("version") or data.get("axeOSVersion") or "",
-            "hashrate": data.get("hashRate") or data.get("hashrate") or 0,
-            "temperature": _temperature(data),
-            "power": _power(data),
-            "pool": _pool(data),
+            "ip":self.ip,
+            "hostname":d.get("hostname") or self.ip,
+            "model":d.get("deviceModel") or d.get("boardVersion") or d.get("ASICModel") or "AxeOS Miner",
+            "firmware":d.get("version") or d.get("axeOSVersion") or "",
+            "hashrate":d.get("hashRate_1m") or d.get("hashRate") or 0,
+            "hashrate_10m":d.get("hashRate_10m") or 0,
+            "hashrate_1h":d.get("hashRate_1h") or 0,
+            "temperature":d.get("temp"),
+            "vrTemp":d.get("vrTemp"),
+            "power":d.get("power"),
+            "wifiRSSI":d.get("wifiRSSI"),
+            "accepted":d.get("sharesAccepted",0),
+            "rejected":d.get("sharesRejected",0),
+            "poolDifficulty":d.get("poolDifficulty"),
+            "fallbackActive":bool(d.get("isUsingFallbackStratum")),
+            "failover":bool(d.get("useFallbackStratum")),
+            "primaryIndex":primary,
+            "secondaryIndex":secondary,
+            "primary":getpool(primary),
+            "fallback":getpool(secondary),
+            "pools":pools,
+            "online":True
         }
 
-    async def set_pool(self, pool):
-        payload = {
-            "stratumProtocol": "SV1",
-            "stratumURL": pool.host,
-            "stratumPort": pool.port,
-            "stratumUser": pool.user,
-            "stratumPassword": pool.password,
-            "stratumSuggestedDifficulty": 0,
-            "stratumExtranonceSubscribe": True,
-            "stratumTLS": 1 if pool.tls else 0,
-            "stratumDecodeCoinbase": True,
-        }
-        return await self._request("PUT", "/api/system/pools/0", json=payload, timeout=3.0)
+    async def set_pool(self,index,pool):
+        payload=dict(pool)
+        payload.setdefault("stratumProtocol","SV1")
+        payload.setdefault("stratumPassword","x")
+        payload.setdefault("stratumSuggestedDifficulty",0)
+        payload.setdefault("stratumExtranonceSubscribe",True)
+        payload.setdefault("stratumTLS",False)
+        payload.setdefault("stratumDecodeCoinbase",False)
+        return await self.request("PUT",f"/api/system/pools/{int(index)}",json=payload)
+
+    async def set_settings(self,primary,secondary,use_fallback):
+        return await self.request("PATCH","/api/system",json={
+            "primaryPoolIndex":int(primary),
+            "secondaryPoolIndex":int(secondary),
+            "useFallbackStratum":1 if use_fallback else 0
+        })
 
     async def restart(self):
-        return await self._request("POST", "/api/system/restart", timeout=3.0)
-
-def _temperature(data):
-    temps = data.get("temps")
-    if isinstance(temps, dict):
-        return temps.get("asic") or temps.get("board") or temps.get("vr")
-    return data.get("temp") or data.get("temperature")
-
-def _power(data):
-    power = data.get("power")
-    return power.get("power") if isinstance(power, dict) else power
-
-def _pool(data):
-    for key in ("pool", "stratumURL", "stratumUrl"):
-        if data.get(key):
-            return data[key]
-    return ""
+        return await self.request("POST","/api/system/restart")

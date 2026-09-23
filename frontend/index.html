@@ -1,72 +1,45 @@
 <!doctype html>
 <html lang="de">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PoolChanger</title>
 <style>
-body{margin:0;background:#101217;color:#eee;font-family:system-ui,sans-serif}
-header{padding:20px 24px;border-bottom:1px solid #2b2f38}
-main{max-width:1100px;margin:auto;padding:24px}
-h1{margin:0}.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
-button,input{font:inherit;padding:10px;border-radius:8px;border:1px solid #3b404b;background:#191c23;color:#eee}
-button{cursor:pointer}.primary{background:#2b6ef3!important}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
-.card{background:#181b21;border:1px solid #2b2f38;border-radius:12px;padding:16px;cursor:pointer}
-.card.selected{border-color:#4e8cff}.row{display:flex;justify-content:space-between;margin:6px 0}
-.muted{color:#9ca3af}.status{color:#6ee7a0}
-.modal{position:fixed;inset:0;background:#0009;display:none;align-items:center;justify-content:center;padding:20px}
-.modal.open{display:flex}.panel{background:#181b21;padding:22px;border-radius:14px;width:min(500px,100%)}
-label{display:block;margin:12px 0 5px;color:#b7bdc9}
-</style>
-</head>
-<body>
-<header><h1>⛏️ PoolChanger</h1></header>
-<main>
-<div class="toolbar">
-<input id="cidr" value="192.168.0.0/24" placeholder="LAN">
-<button class="primary" onclick="scan()">Miner suchen</button>
-<button onclick="openPool()">Pool ändern</button>
-</div>
-<div id="miners" class="grid"><p class="muted">Noch keine Miner geladen.</p></div>
-</main>
-<div id="modal" class="modal"><div class="panel">
-<h2>Pool ändern</h2><p id="selected" class="muted"></p>
-<label>Pool-Host</label><input id="host" placeholder="192.168.0.10">
-<label>Port</label><input id="port" type="number" value="3333">
-<label>Worker / Benutzer</label><input id="user">
-<label>Passwort</label><input id="password" value="x">
-<label><input id="tls" type="checkbox"> TLS</label>
-<div class="toolbar"><button class="primary" onclick="applyPool()">Anwenden</button><button onclick="closePool()">Abbrechen</button></div>
+:root{--bg:#07111f;--card:#0f1d31;--line:#213652;--txt:#eef5ff;--muted:#8fa4bf;--violet:#805cff;--blue:#36a9ff;--green:#36d59b}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 10% 0,#17335e,transparent 34%),radial-gradient(circle at 90% 5%,#2b194f,transparent 30%),var(--bg);color:var(--txt);font:15px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.wrap{max-width:1200px;margin:auto;padding:24px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:34px}.brand{display:flex;align-items:center;gap:12px;font-size:21px;font-weight:800}.logo{width:42px;height:42px;border-radius:14px;background:linear-gradient(135deg,var(--violet),var(--blue));display:grid;place-items:center}.logo:after{content:"⚡";font-size:22px}.pill{border:1px solid var(--line);background:#0c192a;padding:8px 12px;border-radius:99px;color:var(--muted)}
+h1{font-size:34px;margin:0}.sub,.muted{color:var(--muted)}.sub{margin:6px 0 0}.scan{display:flex;gap:10px;margin-top:22px}.input{background:#0b1727;border:1px solid var(--line);color:var(--txt);padding:12px 14px;border-radius:12px;outline:0}.scan input{flex:1}
+button{border:0;border-radius:12px;padding:12px 16px;color:white;font-weight:700;background:linear-gradient(135deg,var(--violet),#4c8fff);cursor:pointer}button:disabled{opacity:.45}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:24px 0}.box,.miner,.panel{background:linear-gradient(180deg,#12233ae8,#0d192ae8);border:1px solid var(--line);border-radius:18px;padding:18px}.big{font-size:25px;font-weight:800;margin-top:7px}
+.miners{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}.miner.selected{border-color:#7e62ff;box-shadow:0 0 0 1px #7e62ff33}.mh{display:flex;justify-content:space-between}.name{font-weight:800;font-size:17px}.online{color:var(--green);font-size:12px;font-weight:700}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:17px 0}.metric{background:#091523;border-radius:12px;padding:10px}.metric b{display:block}.poolline{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.select{width:100%;margin-top:15px;background:#182942;border:1px solid var(--line)}
+h2{font-size:19px;margin:30px 0 14px}.panel{display:grid;grid-template-columns:1fr 1fr;gap:18px}.field label{display:block;color:var(--muted);font-size:12px;margin-bottom:6px}.field input{width:100%}.full{grid-column:1/-1}.switch{display:flex;align-items:center;gap:10px;color:var(--muted)}.actions{display:flex;gap:10px;align-items:center}.msg{color:var(--muted);font-size:13px}
+@media(max-width:750px){.wrap{padding:16px}.stats{grid-template-columns:1fr 1fr}.panel{grid-template-columns:1fr}.full{grid-column:auto}.scan,.actions{flex-direction:column}.scan button,.actions button{width:100%}}@media(max-width:450px){.stats{grid-template-columns:1fr}.pill{display:none}}
+</style></head>
+<body><div class="wrap">
+<header class="top"><div class="brand"><div class="logo"></div>PoolChanger</div><div id="online" class="pill">0 Miner</div></header>
+<h1>Mining Dashboard</h1><p class="sub">AxeOS-Miner im LAN finden und Primary/Fallback zentral verwalten.</p>
+<div class="scan"><input id="cidr" class="input" value="192.168.0.0/24"><button onclick="scan()">Miner suchen</button></div>
+<div class="stats"><div class="box"><div class="muted">Hashrate</div><div id="hash" class="big">—</div></div><div class="box"><div class="muted">Temperatur Ø</div><div id="temp" class="big">—</div></div><div class="box"><div class="muted">Leistung</div><div id="power" class="big">—</div></div><div class="box"><div class="muted">Shares</div><div id="shares" class="big">—</div></div></div>
+<h2>Deine Miner <span id="count" class="muted"></span></h2><div id="miners" class="miners"></div>
+<h2>Pool Manager</h2>
+<div class="panel">
+<div class="field"><label>PRIMARY · Host / URL</label><input id="purl" class="input" placeholder="192.168.0.161"></div>
+<div class="field"><label>Port</label><input id="pport" class="input" value="4567" type="number"></div>
+<div class="field"><label>Primary User / Wallet</label><input id="puser" class="input"></div>
+<div class="field"><label>Primary Passwort</label><input id="ppass" class="input" value="x"></div>
+<div class="field"><label>FALLBACK · Host / URL</label><input id="furl" class="input" placeholder="optional"></div>
+<div class="field"><label>Fallback Port</label><input id="fport" class="input" value="4567" type="number"></div>
+<div class="field"><label>Fallback User / Wallet</label><input id="fuser" class="input"></div>
+<div class="field"><label>Fallback Passwort</label><input id="fpass" class="input" value="x"></div>
+<div class="switch full"><input id="failover" type="checkbox"> Failover/Fallback aktivieren</div>
+<div class="actions full"><button id="apply" onclick="applyPool()" disabled>Pool auf Auswahl anwenden</button><span id="msg" class="msg"></span></div>
 </div></div>
 <script>
-let miners=[],selected=new Set();
-function render(){
- const el=document.getElementById('miners');
- if(!miners.length){el.innerHTML='<p class="muted">Keine Miner gefunden.</p>';return}
- el.innerHTML=miners.map(m=>`<div class="card ${selected.has(m.ip)?'selected':''}" onclick="toggle('${m.ip}')">
- <div class="row"><strong>${esc(m.name)}</strong><span class="status">● online</span></div>
- <div class="muted">${esc(m.model)} · ${esc(m.ip)}</div><hr>
- <div class="row"><span>Hashrate</span><strong>${hash(m.hashrate)}</strong></div>
- <div class="row"><span>Temperatur</span><strong>${m.temperature??'—'} °C</strong></div>
- <div class="row"><span>Pool</span><strong>${esc(m.pool||'—')}</strong></div></div>`).join('')
-}
-function toggle(ip){selected.has(ip)?selected.delete(ip):selected.add(ip);render()}
-async function scan(){
- document.getElementById('miners').innerHTML='<p class="muted">Suche im LAN …</p>';
- const r=await fetch('/api/miners/scan?cidr='+encodeURIComponent(document.getElementById('cidr').value),{method:'POST'});
- const d=await r.json();miners=d.miners||[];selected.clear();render()
-}
-function openPool(){if(!selected.size)return alert('Bitte Miner auswählen.');document.getElementById('selected').textContent=selected.size+' Miner ausgewählt';document.getElementById('modal').classList.add('open')}
-function closePool(){document.getElementById('modal').classList.remove('open')}
-async function applyPool(){
- const pool={host:document.getElementById('host').value.trim(),port:+document.getElementById('port').value,user:document.getElementById('user').value,password:document.getElementById('password').value,tls:document.getElementById('tls').checked};
- if(!pool.host)return alert('Pool-Host fehlt.');
- const r=await fetch('/api/pools/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({miner_ips:[...selected],pool,restart:true})});
- const d=await r.json();alert(d.results.map(x=>x.ip+': '+(x.ok?'OK':x.error)).join('\n'));closePool();scan()
-}
-function hash(v){if(typeof v!=='number')return v||'—';if(v>1e12)return(v/1e12).toFixed(2)+' TH/s';if(v>1e9)return(v/1e9).toFixed(2)+' GH/s';return v}
-function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
-</script>
-</body>
-</html>
+let miners=[];const $=id=>document.getElementById(id);
+function hash(v){v=Number(v)||0;if(v>=1e12)return(v/1e12).toFixed(2)+' TH/s';if(v>=1e9)return(v/1e9).toFixed(2)+' GH/s';if(v>=1e6)return(v/1e6).toFixed(1)+' MH/s';return v?Math.round(v)+' H/s':'—'}
+function render(){let b=$('miners');b.innerHTML='';miners.forEach((m,i)=>{let p=m.primary||{},f=m.fallback||{},d=document.createElement('div');d.className='miner '+(m.selected?'selected':'');d.innerHTML='<div class="mh"><div><div class="name">'+m.hostname+'</div><div class="muted">'+m.model+' · '+m.ip+' · '+m.firmware+'</div></div><div class="online">● ONLINE</div></div><div class="metrics"><div class="metric"><b>'+hash(m.hashrate)+'</b><span class="muted">1m Hashrate</span></div><div class="metric"><b>'+(m.temperature??'—')+' °C</b><span class="muted">ASIC</span></div><div class="metric"><b>'+(m.power??'—')+' W</b><span class="muted">Power</span></div></div><div class="poolline">Primary: '+(p.stratumURL||'—')+':'+(p.stratumPort||'')+'</div><div class="poolline">Fallback: '+(f.stratumURL||'—')+':'+(f.stratumPort||'')+'</div><div class="poolline">'+(m.failover?'Failover konfiguriert':'')+(m.fallbackActive?' · aktuell Fallback':'')+'</div><button class="select" onclick="toggle('+i+')">'+(m.selected?'✓ Ausgewählt':'Miner auswählen')+'</button>';b.appendChild(d)});$('count').textContent=miners.length?' · '+miners.length+' gefunden':'';$('online').textContent=miners.length+' Miner';$('apply').disabled=!miners.some(x=>x.selected);let h=miners.reduce((a,x)=>a+(Number(x.hashrate)||0),0),t=miners.filter(x=>Number.isFinite(Number(x.temperature))),s=miners.reduce((a,x)=>a+(Number(x.accepted)||0),0);$('hash').textContent=hash(h);$('temp').textContent=t.length?(t.reduce((a,x)=>a+Number(x.temperature),0)/t.length).toFixed(1)+' °C':'—';$('power').textContent=miners.reduce((a,x)=>a+(Number(x.power)||0),0)+' W';$('shares').textContent=s}
+function toggle(i){miners[i].selected=!miners[i].selected;render()}
+async function scan(){$('count').textContent=' · Suche …';try{let r=await fetch('/api/miners/scan?cidr='+encodeURIComponent($('cidr').value));if(!r.ok)throw Error(await r.text());miners=(await r.json()).map(x=>({...x,selected:false}));if(miners[0]){let p=miners[0].primary||{},f=miners[0].fallback||{};$('purl').value=p.stratumURL||'';$('pport').value=p.stratumPort||3333;$('puser').value=p.stratumUser||'';$('furl').value=f.stratumURL||'';$('fport').value=f.stratumPort||3333;$('fuser').value=f.stratumUser||'';$('failover').checked=miners[0].failover}render()}catch(e){$('count').textContent=' · Fehler: '+e.message}}
+async function applyPool(){let selected=miners.filter(x=>x.selected).map(x=>x.ip);$('msg').textContent='Wird angewendet …';let body={miners:selected,primary:{url:$('purl').value,port:Number($('pport').value),user:$('puser').value,password:$('ppass').value},fallback:$('furl').value?{url:$('furl').value,port:Number($('fport').value),user:$('fuser').value,password:$('fpass').value}:null,failover:$('failover').checked};try{let r=await fetch('/api/pools/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});let out=await r.json();$('msg').textContent=out.filter(x=>x.ok).length+' Miner aktualisiert.';setTimeout(scan,1500)}catch(e){$('msg').textContent='Fehler: '+e.message}}
+scan();
+</script></body></html>
